@@ -1,39 +1,75 @@
+"""Supplier Purchase Order Tracker module.
+
+Manages purchase orders, receipt status, warehouse notifications,
+and cleans up completed orders using SQLite.
+"""
+
 import sqlite3
 
-conn = sqlite3.connect(":memory:")
-conn.execute("CREATE TABLE orders (id INTEGER PRIMARY KEY, supplier TEXT, item TEXT, quantity INTEGER, received INTEGER)")
-order_total = 0
 
-def placeOrder(conn, supplier, item, quantity):
-    global order_total
-    # FIX: Parameterized query prevents SQL injection (Bandit B608)
-    conn.execute("INSERT INTO orders (supplier, item, quantity, received) VALUES (?, ?, ?, 0)", (supplier, item, quantity))
-    order_total += quantity
-    return order_total
+def create_database():
+    """Initialize in-memory database and create orders table."""
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        "CREATE TABLE orders ("
+        "id INTEGER PRIMARY KEY, "
+        "supplier TEXT, "
+        "item TEXT, "
+        "quantity INTEGER, "
+        "received INTEGER)"
+    )
+    return conn
 
-def markReceived(conn, order_id, remarks):
+
+def place_order(conn, supplier, item, quantity, current_total):
+    """Place new order using parameterized queries to stop SQL injection."""
+    conn.execute(
+        "INSERT INTO orders (supplier, item, quantity, received) "
+        "VALUES (?, ?, ?, 0)",
+        (supplier, item, quantity),
+    )
+    return current_total + quantity
+
+
+def mark_received(conn, order_id, remarks=None):
+    """Mark an order as received by its order ID."""
+    _ = remarks
     conn.execute("UPDATE orders SET received = 1 WHERE id = ?", (order_id,))
 
-def notifyWarehouse(supplier):
-    # FIX: Replaced os.system with native print to eliminate shell command vulnerabilities (Bandit B605/B607/B603/B404)
+
+def notify_warehouse(supplier):
+    """Notify warehouse using safe print to prevent shell injection."""
     print(f"notifying warehouse about {supplier}")
 
+
 def cleanup(conn):
+    """Clean up fulfilled orders with specific exception handling."""
     try:
         conn.execute("DELETE FROM orders WHERE received = 1")
     except sqlite3.Error as err:
-        # FIX: Specific exception logging instead of pass (Bandit B110)
         print(f"Database error during cleanup: {err}")
 
-def pendingCount(conn):
-    return conn.execute("SELECT COUNT(*) FROM orders WHERE received = 0").fetchone()[0]
+
+def pending_count(conn):
+    """Return the total count of pending orders."""
+    cursor = conn.execute("SELECT COUNT(*) FROM orders WHERE received = 0")
+    row = cursor.fetchone()
+    return row[0] if row else 0
+
 
 def main():
-    placeOrder(conn, "Acme Steel", "rods", 40)
-    placeOrder(conn, "Bolt Co", "bolts", 500)
-    markReceived(conn, 1, "ok")
-    notifyWarehouse("Acme")
-    print(pendingCount(conn), order_total)
-    cleanup(conn)
+    """Execute main demonstration workflow for purchase order tracker."""
+    conn = create_database()
+    order_total = 0
 
-main()
+    order_total = place_order(conn, "Acme Steel", "rods", 40, order_total)
+    order_total = place_order(conn, "Bolt Co", "bolts", 500, order_total)
+    mark_received(conn, 1, "ok")
+    notify_warehouse("Acme")
+    print(pending_count(conn), order_total)
+    cleanup(conn)
+    conn.close()
+
+
+if __name__ == "__main__":
+    main()
