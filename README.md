@@ -1,3 +1,8 @@
+#### NAME: SHRUJAN N
+#### SEC: K
+#### SRN: PES1UG24CS624
+
+
 # Lab 5: Static Code Analysis — Supplier Purchase Order Tracker
 
 **Your file:** `supplier_orders.py`
